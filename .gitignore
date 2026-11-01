@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+data/uploads/
+data/outputs/
+data/test_clips/
+*.pt
+*.log

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Horse Motion Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  /* Instrument aesthetic: deep slate ground, one green accent, hairline rules,
+     Archivo display + Inter body + IBM Plex Mono for every measured number. */
+  :root {
+    --bg:#0d1214; --surface:#131b1e; --inset:#0f1618; --inset-hi:#15201f;
+    --line:#24302f; --line2:#30403e;
+    --text:#e8efec; --muted:#8a9a95; --faint:#5d6c68;
+    --accent:#4bd99a; --accent-dim:#2f8f68;
+    --walk:#58b6f0; --trot:#4bd99a; --canter:#e7b24e; --gallop:#ef7a5e; --idle:#8a9a95;
+    --radius:14px;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body {
+    font-family:"Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.55; min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:860px; margin:0 auto; padding:34px 20px 72px; }
+  h1,h2,h3 { font-family:"Archivo", system-ui, sans-serif; letter-spacing:-.015em; margin:0; }
+  .mono { font-family:"IBM Plex Mono", ui-monospace, monospace; }
+  .tnum { font-variant-numeric:tabular-nums; }
+
+  /* ---------- hero ---------- */
+  .hero { margin-bottom:30px; }
+  .brandrow { display:flex; align-items:center; gap:13px; margin-bottom:16px; }
+  .mark { width:42px; height:42px; flex:0 0 auto; color:var(--accent); }
+  .brandrow h1 { font-size:1.55rem; font-weight:800; }
+  .brandrow .tagline { color:var(--muted); font-size:.85rem; margin-top:1px;
+    text-transform:uppercase; letter-spacing:.08em; font-weight:500; }
+  .synopsis { color:#cad4d0; font-size:1.05rem; max-width:64ch; margin:0; }
+  .synopsis b { color:var(--text); font-weight:600; }
+
+  /* measures spec strip */
+  .measures { display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+    border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin:22px 0 14px; }
+  .measures .m { padding:13px 15px; border-right:1px solid var(--line); min-width:0; }
+  .measures .m:last-child { border-right:0; }
+  .measures .mk { font-family:"Archivo",sans-serif; font-weight:700; font-size:.95rem; color:var(--text); }
+  .measures .md { color:var(--muted); font-size:.78rem; margin-top:2px; }
+  @media (max-width:560px){ .measures { grid-template-columns:repeat(2,1fr); }
+    .measures .m:nth-child(2){ border-right:0; }
+    .measures .m:nth-child(1),.measures .m:nth-child(2){ border-bottom:1px solid var(--line); } }
+
+  .best { color:var(--faint); font-size:.85rem; }
+  .best b { color:var(--muted); font-weight:600; }
+
+  /* ---------- cards ---------- */
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px; margin-bottom:18px; }
+
+  /* upload — solid panel, no dashed border */
+  .drop { position:relative; display:flex; flex-direction:column; align-items:center; gap:4px;
+    text-align:center; cursor:pointer; background:var(--inset); border:1px solid var(--line2);
+    border-radius:12px; padding:34px 20px; transition:border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color:var(--accent); background:var(--inset-hi); }
+  .drop input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .drop .upic { width:30px; height:30px; color:var(--muted); margin-bottom:6px; }
+  .drop:hover .upic, .drop.over .upic { color:var(--accent); }
+  .drop .big { font-family:"Archivo",sans-serif; font-weight:600; font-size:1.02rem; }
+  .drop .sub { color:var(--muted); font-size:.82rem; letter-spacing:.03em; }
+
+  .actionrow { display:flex; gap:14px; align-items:center; margin-top:16px; flex-wrap:wrap; }
+  button.go { font-family:"Archivo",sans-serif; background:var(--accent); color:#062014; border:0;
+    border-radius:10px; padding:11px 22px; font-weight:700; font-size:.96rem; cursor:pointer; }
+  button.go:hover:not(:disabled){ background:#5ee3a8; }
+  button.go:disabled { background:var(--line2); color:var(--faint); cursor:default; }
+  .phase { color:var(--muted); font-size:.86rem; }
+  .bar { height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:16px; }
+  .bar > div { height:100%; width:0; border-radius:99px; background:var(--accent); transition:width .35s; }
+  .err { color:var(--gallop); margin-top:12px; font-size:.9rem; }
+  .filename { color:var(--muted); font-size:.86rem; }
+  .hidden { display:none !important; }
+
+  /* ---------- results ---------- */
+  .resulthead { display:flex; align-items:center; justify-content:space-between; gap:16px;
+    flex-wrap:wrap; margin-bottom:6px; }
+  .resulthead h2 { font-size:1.15rem; font-weight:700; }
+  .gait-badge { display:inline-flex; align-items:center; gap:11px; background:var(--inset);
+    border:1px solid var(--line2); border-radius:10px; padding:7px 15px 7px 12px; }
+  .gait-badge .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); flex:0 0 auto; }
+  .gait-badge .lab { font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); }
+  .gait-badge .val { font-family:"Archivo",sans-serif; font-weight:700; font-size:1.05rem; text-transform:capitalize; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(128px,1fr)); gap:1px;
+    background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:16px 0; }
+  .stat { background:var(--surface); padding:14px 15px; min-width:0; }
+  .stat .v { font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:1.5rem; line-height:1.1;
+    font-variant-numeric:tabular-nums; }
+  .stat .v small { font-family:"Inter",sans-serif; font-size:.7rem; color:var(--muted); font-weight:600; margin-left:1px; }
+  .stat .l { font-size:.82rem; font-weight:600; margin-top:5px; }
+  .stat .h { color:var(--faint); font-size:.73rem; margin-top:1px; }
+
+  .chartcard { background:var(--inset); border:1px solid var(--line); border-radius:12px; padding:14px 16px 8px; margin:16px 0; }
+  .chartcard h3 { font-size:.92rem; font-weight:700; }
+  .chartcard .csub { color:var(--muted); font-size:.77rem; margin-bottom:8px; }
+  #speedChart { width:100%; height:auto; display:block; }
+
+  video { width:100%; border-radius:10px; margin-top:4px; background:#000; border:1px solid var(--line); }
+  .notes { color:var(--muted); font-size:.85rem; margin:14px 0 0; padding-left:18px; }
+  .notes li { margin-bottom:5px; }
+
+  .explain { display:flex; gap:12px; align-items:flex-start; border:1px solid var(--line);
+    border-radius:12px; padding:14px 16px; color:#c6d0cc; font-size:.88rem; background:var(--surface); }
+  .explain .k { font-family:"Archivo",sans-serif; font-weight:700; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.05em; font-size:.74rem; flex:0 0 auto; padding-top:2px; }
+  .explain b { color:var(--text); font-weight:600; }
+  footer { text-align:center; color:var(--faint); font-size:.78rem; margin-top:26px; }
+  footer .mono { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== HERO ===== -->
+  <header class="hero">
+    <div class="brandrow">
+      <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 17a9 9 0 0 1 18 0"/>
+        <line x1="12" y1="17" x2="17" y2="11"/>
+        <circle cx="12" cy="17" r="1.6" fill="currentColor" stroke="none"/>
+        <line x1="12" y1="6" x2="12" y2="4"/><line x1="5.5" y1="8" x2="4.3" y2="6.6"/><line x1="18.5" y1="8" x2="19.7" y2="6.6"/>
+      </svg>
+      <div>
+        <h1>Horse Motion Analyzer</h1>
+        <div class="tagline">Computer-vision gait &amp; speed analysis</div>
+      </div>
+    </div>
+    <p class="synopsis">
+      Upload a video of a horse and the app <b>finds and tracks</b> it frame by frame,
+      then measures how it's moving — <b>relative speed</b>, <b>gait</b>, and
+      <b>stride cadence</b>. It works straight from your phone with
+      <b>no calibration or markers</b>: speed is read in the horse's own body lengths,
+      not miles per hour.
+    </p>
+    <div class="measures">
+      <div class="m"><div class="mk">Speed</div><div class="md">body lengths / sec</div></div>
+      <div class="m"><div class="mk">Gait</div><div class="md">walk · trot · canter · gallop</div></div>
+      <div class="m"><div class="mk">Cadence</div><div class="md">strides / minute</div></div>
+      <div class="m"><div class="mk">Steadiness</div><div class="md">motion smoothness</div></div>
+    </div>
+    <p class="best"><b>Best results:</b> film side-on, one horse, whole body in frame, camera held still.</p>
+  </header>
+
+  <!-- ===== UPLOAD ===== -->
+  <div class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="video/*" />
+      <svg class="upic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
+      </svg>
+      <div class="big">Drop a horse video here, or click to choose</div>
+      <div class="sub mono" id="fname">MP4 · MOV · AVI · MKV · WEBM</div>
+    </label>
+    <div class="actionrow">
+      <button class="go" id="go" disabled>Analyze video</button>
+      <span class="phase" id="phase"></span>
+    </div>
+    <div class="bar hidden" id="barwrap"><div id="bar"></div></div>
+    <p class="err hidden" id="err"></p>
+  </div>
+
+  <!-- ===== RESULTS ===== -->
+  <div class="card hidden" id="results">
+    <div class="resulthead">
+      <h2>Analysis</h2>
+      <div class="gait-badge">
+        <span class="dot" id="gaitDot"></span>
+        <div>
+          <div class="lab">Detected gait</div>
+          <div class="val" id="gaitVal">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" id="stats"></div>
+
+    <div class="chartcard">
+      <h3>Speed over time</h3>
+      <div class="csub">Body lengths per second, across the clip</div>
+      <svg id="speedChart" viewBox="0 0 680 180" preserveAspectRatio="none" role="img"
+           aria-label="Speed over the course of the clip"></svg>
+    </div>
+
+    <video id="vid" controls playsinline></video>
+    <ul class="notes" id="notes"></ul>
+  </div>
+
+  <!-- ===== EXPLAINER ===== -->
+  <div class="explain">
+    <span class="k">Why BL/s</span>
+    <div>Without the camera distance, true mph can't be recovered from pixels alone.
+      Measuring movement in the horse's <b>own body lengths</b> keeps the speed read
+      consistent whether it's filmed up close or far away — ideal for comparing clips
+      and spotting changes in a horse's motion.</div>
+  </div>
+
+  <footer>Pipeline: <span class="mono">YOLO detection + ByteTrack</span> on every frame · processed on the server</footer>
+</div>
+
+<script>
+const $ = s => document.getElementById(s);
+const fileInput=$("file"), drop=$("drop"), go=$("go"), fname=$("fname"),
+      phase=$("phase"), barwrap=$("barwrap"), bar=$("bar"), err=$("err"),
+      results=$("results"), statsEl=$("stats"), notesEl=$("notes"), vid=$("vid");
+
+let chosen=null;
+function setFile(f){ if(!f) return; chosen=f; fname.textContent=f.name; go.disabled=false; }
+fileInput.addEventListener("change", e=>setFile(e.target.files[0]));
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+
+go.addEventListener("click", async ()=>{
+  if(!chosen) return;
+  err.classList.add("hidden"); results.classList.add("hidden");
+  go.disabled=true; barwrap.classList.remove("hidden");
+  bar.style.width="0%"; phase.textContent="Uploading…";
+  const form=new FormData(); form.append("file", chosen);
+  let job;
+  try{
+    const res=await fetch("/api/analyze",{method:"POST",body:form});
+    if(!res.ok) throw new Error((await res.json()).detail||"Upload failed");
+    job=(await res.json()).job_id;
+  }catch(e){ return fail(e.message); }
+
+  phase.textContent="Analyzing — tracking the horse…";
+  const poll=setInterval(async ()=>{
+    let s; try{ s=await (await fetch("/api/status/"+job)).json(); }catch{ return; }
+    bar.style.width=Math.round((s.progress||0)*100)+"%";
+    if(s.status==="done"){ clearInterval(poll); show(s.result); }
+    else if(s.status==="error"){ clearInterval(poll); fail(s.error); }
+  }, 700);
+});
+
+function fail(msg){
+  go.disabled=false; barwrap.classList.add("hidden"); phase.textContent="";
+  err.textContent=msg; err.classList.remove("hidden");
+}
+
+const GAIT_COLOR = {
+  "standing / grazing":"var(--idle)", "walk":"var(--walk)", "trot":"var(--trot)",
+  "canter":"var(--canter)", "gallop":"var(--gallop)"
+};
+
+function show(r){
+  go.disabled=false; phase.textContent="Done"; bar.style.width="100%";
+
+  const gcol = GAIT_COLOR[r.gait] || "var(--accent)";
+  $("gaitVal").textContent = r.gait;
+  $("gaitDot").style.background = gcol;
+
+  const stats=[
+    {v:r.peak_speed_bls, u:"BL/s", l:"Peak speed", h:"95th-percentile pace"},
+    {v:r.avg_speed_bls, u:"BL/s", l:"Average speed", h:"across the clip"},
+    {v:r.cadence_per_min, u:"/min", l:"Cadence", h:"stride rate"},
+    {v:Math.round(r.smoothness*100), u:"%", l:"Steadiness", h:"motion smoothness"},
+    {v:r.duration_s, u:"s", l:"Clip length", h:r.fps+" fps"},
+    {v:r.frames_with_horse, u:"", l:"Frames tracked", h:"horse in view"},
+  ];
+  statsEl.innerHTML = stats.map(s=>`<div class="stat">
+      <div class="v">${s.v}${s.u?`<small>${s.u}</small>`:""}</div>
+      <div class="l">${s.l}</div><div class="h">${s.h}</div></div>`).join("");
+
+  // resolve the CSS var to a concrete color for the SVG chart
+  const resolved = getComputedStyle(document.documentElement)
+      .getPropertyValue(gcol.replace("var(","").replace(")","").trim()) || "#4bd99a";
+  drawSpeed(r.speed_series||[], resolved.trim() || "#4bd99a");
+
+  notesEl.innerHTML = (r.notes||[]).map(n=>`<li>${n}</li>`).join("");
+  vid.src = r.video_url + "?t=" + Date.now();
+  results.classList.remove("hidden");
+  results.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+function drawSpeed(series, color){
+  const svg=$("speedChart"); const W=680,H=180, padL=40,padR=10,padT=12,padB=24;
+  if(!series.length){ svg.innerHTML=""; return; }
+  const n=series.length;
+  const maxV=Math.max(0.1, ...series);
+  const nice = maxV<=1?1 : maxV<=2?2 : Math.ceil(maxV);
+  const x=i=> padL + (W-padL-padR)*(n<2?0:i/(n-1));
+  const y=v=> padT + (H-padT-padB)*(1 - v/nice);
+  let g=""; const ticks=4;
+  for(let t=0;t<=ticks;t++){
+    const val=nice*t/ticks, yy=y(val);
+    g+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#24302f" stroke-width="1"/>`;
+    g+=`<text x="${padL-6}" y="${yy+3.5}" text-anchor="end" font-size="10" fill="#5d6c68" font-family="IBM Plex Mono,monospace">${val.toFixed(val<10?1:0)}</text>`;
+  }
+  let line="";
+  series.forEach((v,i)=>{ line += (i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)+" "; });
+  const area = line + `L ${x(n-1).toFixed(1)} ${y(0)} L ${x(0).toFixed(1)} ${y(0)} Z`;
+  let pi=0; series.forEach((v,i)=>{ if(v>series[pi]) pi=i; });
+  const peak=`<circle cx="${x(pi).toFixed(1)}" cy="${y(series[pi]).toFixed(1)}" r="3.5" fill="${color}"/>`;
+  svg.innerHTML = `<defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".26"/>
+      <stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    ${g}
+    <path d="${area}" fill="url(#sg)"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    ${peak}
+    <text x="${padL}" y="${H-6}" font-size="10" fill="#5d6c68" font-family="IBM Plex Mono,monospace">start</text>
+    <text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="10" fill="#5d6c68" font-family="IBM Plex Mono,monospace">end</text>`;
+}
+</script>
+</body>
+</html>
